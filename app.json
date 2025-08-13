@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "iPrayUST",
+    "slug": "iPrayUST",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/tiger.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "iprayust",
+    "splash": {
+      "image": "./assets/tiger.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ust.iprayust"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/tiger.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.ust.iprayust"
+    },
+    "web": {
+      "favicon": "./assets/tiger.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
