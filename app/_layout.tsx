@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { colors } from '../constants/styles';
+import { AuthProvider } from '../contexts/AuthContext';
+import { PrayerProvider } from '../contexts/PrayerContext';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -29,23 +31,27 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="auto" />
-      <View style={styles.content}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="login" />
-          <Stack.Screen name="signup" />
-          <Stack.Screen name="main" />
-          <Stack.Screen name="prayer-detail" />
-        </Stack>
-      </View>
-    </View>
+    <AuthProvider>
+      <PrayerProvider>
+        <View style={styles.container}>
+          <StatusBar style="auto" />
+          <View style={styles.content}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+              }}
+            >
+              <Stack.Screen name="onboarding" />
+              <Stack.Screen name="login" />
+              <Stack.Screen name="signup" />
+              <Stack.Screen name="main" />
+              <Stack.Screen name="prayer-detail" />
+            </Stack>
+          </View>
+        </View>
+      </PrayerProvider>
+    </AuthProvider>
   );
 }
 

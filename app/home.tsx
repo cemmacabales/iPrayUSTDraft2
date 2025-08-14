@@ -3,20 +3,26 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Anima
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { VERSE_OF_THE_DAY } from '../constants/prayers';
 import { colors, commonStyles } from '../constants/styles';
 import { getPrayerOfTheDay, getPrayerSubtitle, getPrayerIcon, getTimeContext, getAllPrayers } from '../utils/prayerUtils';
-import { StorageUtils } from '../utils/storage';
 import { Prayer } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { usePrayer } from '../contexts/PrayerContext';
 
 const { width } = Dimensions.get('window');
 
 export default function HomePage() {
+  const { user, userProfile } = useAuth();
+  const { 
+    userBookmarks, 
+    recentPrayers, 
+    prayerStats, 
+    verseOfTheDay,
+    loading: prayerLoading 
+  } = usePrayer();
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [prayerOfTheDay, setPrayerOfTheDay] = useState(() => getPrayerOfTheDay());
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
-  const [recentPrayers, setRecentPrayers] = useState<string[]>([]);
-  const [prayerStats, setPrayerStats] = useState<Record<string, number>>({});
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnims = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
   const slideAnims = useRef([0, 1, 2, 3].map(() => new Animated.Value(20))).current;
@@ -110,20 +116,8 @@ export default function HomePage() {
   const suggestedPrayers = getSuggestedPrayers();
 
   // Load user data
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    const [bookmarksData, recentData, statsData] = await Promise.all([
-      StorageUtils.getBookmarks(),
-      StorageUtils.getRecentPrayers(),
-      StorageUtils.getPrayerStats(),
-    ]);
-    setBookmarks(bookmarksData);
-    setRecentPrayers(recentData);
-    setPrayerStats(statsData);
-  };
+  // Data is now loaded through Firebase contexts
+  // No need for manual data loading
 
   // Staggered animations on mount
   useEffect(() => {
@@ -417,7 +411,7 @@ export default function HomePage() {
       </View>
 
       {/* My Prayers Section */}
-      {(bookmarks.length > 0 || recentPrayers.length > 0) && (
+      {(userBookmarks.length > 0 || recentPrayers.length > 0) && (
         <View style={commonStyles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -438,7 +432,7 @@ export default function HomePage() {
             contentContainerStyle={styles.myPrayersContainer}
           >
             {/* Recent Prayers */}
-            {recentPrayers.slice(0, 3).map((prayerId, index) => {
+            {recentPrayers.slice(0, 3).map((prayerId: string, index: number) => {
               const allPrayers = getAllPrayers();
               const prayer = allPrayers.find(p => p.id === prayerId);
               if (!prayer) return null;
@@ -463,7 +457,7 @@ export default function HomePage() {
             })}
             
             {/* Bookmarked Prayers */}
-            {bookmarks.slice(0, 3).map((prayerId, index) => {
+            {userBookmarks.slice(0, 3).map((prayerId: string, index: number) => {
               const allPrayers = getAllPrayers();
               const prayer = allPrayers.find(p => p.id === prayerId);
               if (!prayer) return null;

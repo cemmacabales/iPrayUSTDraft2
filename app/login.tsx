@@ -3,9 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, TextInput, Alert, ScrollView,
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { colors } from '../constants/styles';
-import { StorageUtils } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,18 +20,25 @@ export default function LoginPage() {
 
     setIsLoading(true);
     
-    // Simulate loading
-    setTimeout(async () => {
-      try {
-        // For now, accept any non-empty email and password
-        await StorageUtils.markUserLoggedIn();
-        setIsLoading(false);
-        router.replace('/main');
-      } catch (error) {
-        setIsLoading(false);
-        Alert.alert('Error', 'Login failed. Please try again.');
+    try {
+      await signIn(email.trim(), password);
+      router.replace('/main');
+    } catch (error: any) {
+      setIsLoading(false);
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email address.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
       }
-    }, 1000);
+      
+      Alert.alert('Login Error', errorMessage);
+    }
   };
 
 

@@ -1,0 +1,1 @@
+1. this project will only run in expo go. dont use localhost to view the app

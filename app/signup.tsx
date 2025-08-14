@@ -3,9 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, TextInput, Alert, ScrollView,
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { colors } from '../constants/styles';
-import { StorageUtils } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SignupPage() {
+  const { signUp } = useAuth();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [studentNumber, setStudentNumber] = useState('');
@@ -34,18 +35,31 @@ export default function SignupPage() {
 
     setIsLoading(true);
     
-    // Simulate loading
-    setTimeout(async () => {
-      try {
-        // For now, accept any valid email and password
-        await StorageUtils.markOnboardingCompleted();
-        setIsLoading(false);
-        router.replace('/main');
-      } catch (error) {
-        setIsLoading(false);
-        Alert.alert('Error', 'Sign up failed. Please try again.');
+    try {
+      await signUp(
+        email.trim(), 
+        password, 
+        firstName.trim(), 
+        lastName.trim(), 
+        studentNumber.trim()
+      );
+      router.replace('/main');
+    } catch (error: any) {
+      setIsLoading(false);
+      let errorMessage = 'Sign up failed. Please try again.';
+      
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'An account with this email already exists.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak. Please choose a stronger password.';
+      } else if (error.code === 'auth/operation-not-allowed') {
+        errorMessage = 'Email/password accounts are not enabled. Please contact support.';
       }
-    }, 1000);
+      
+      Alert.alert('Sign Up Error', errorMessage);
+    }
   };
 
 
