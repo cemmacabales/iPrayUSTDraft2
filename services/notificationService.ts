@@ -46,12 +46,18 @@ export class NotificationService {
         return null;
       }
 
-      // Get the token that uniquely identifies this device
-      const token = await Notifications.getExpoPushTokenAsync({
-        projectId: 'your-expo-project-id', // Replace with your Expo project ID
-      });
-      
-      return token.data;
+      // For development with Expo Go, we may not have a projectId configured
+      // This is acceptable for local development and testing
+      try {
+        const token = await Notifications.getExpoPushTokenAsync();
+        return token.data;
+      } catch (tokenError: any) {
+        if (tokenError.message?.includes('projectId')) {
+          console.warn('Push notifications require an Expo project ID for production use. Skipping for development.');
+          return null;
+        }
+        throw tokenError;
+      }
     } catch (error) {
       console.error('Error getting Expo push token:', error);
       return null;
@@ -69,6 +75,8 @@ export class NotificationService {
           updatedAt: serverTimestamp()
         });
         console.log('Device token registered successfully');
+      } else {
+        console.log('No push token available - this is normal for development with Expo Go');
       }
     } catch (error) {
       console.error('Error registering device token:', error);
@@ -88,10 +96,7 @@ export class NotificationService {
           body,
           sound: 'default',
         },
-        trigger: {
-          type: 'timeInterval',
-          seconds,
-        },
+        trigger: null,
       });
       
       return notificationId;

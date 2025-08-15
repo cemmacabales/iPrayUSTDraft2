@@ -17,9 +17,11 @@ service cloud.firestore {
     }
     
     function isValidUserData() {
-      return request.resource.data.keys().hasAll(['id', 'email', 'displayName']) &&
+      return request.resource.data.keys().hasAll(['id', 'email', 'displayName', 'role', 'personalLibrary']) &&
              request.resource.data.id == request.auth.uid &&
-             request.resource.data.email == request.auth.token.email;
+             request.resource.data.email == request.auth.token.email &&
+             request.resource.data.role in ['user', 'admin'] &&
+             request.resource.data.personalLibrary.keys().hasAll(['bookmarkedPrayers']);
     }
     
     // Users collection - users can only access their own documents

@@ -24,12 +24,20 @@ export interface User {
   firstName?: string;
   lastName?: string;
   studentNumber?: string;
+  role: 'user' | 'admin';
   bookmarks: string[];
+  personalLibrary: {
+    bookmarkedPrayers: string[];
+    customPrayers?: string[];
+    favoriteCategories?: string[];
+  };
   preferences: {
     morningReminder: boolean;
     eveningReminder: boolean;
     reminderTime: string;
   };
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface ReminderSettings {

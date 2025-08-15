@@ -39,7 +39,13 @@ export class FirebaseService {
         firstName: firstName || '',
         lastName: lastName || '',
         studentNumber: studentNumber || '',
+        role: 'user',
         bookmarks: [],
+        personalLibrary: {
+          bookmarkedPrayers: [],
+          customPrayers: [],
+          favoriteCategories: []
+        },
         preferences: {
           morningReminder: false,
           eveningReminder: false,
@@ -178,6 +184,7 @@ export class FirebaseService {
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
         bookmarks: arrayUnion(prayerId),
+        'personalLibrary.bookmarkedPrayers': arrayUnion(prayerId),
         updatedAt: serverTimestamp()
       });
     } catch (error) {
@@ -191,10 +198,52 @@ export class FirebaseService {
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
         bookmarks: arrayRemove(prayerId),
+        'personalLibrary.bookmarkedPrayers': arrayRemove(prayerId),
         updatedAt: serverTimestamp()
       });
     } catch (error) {
       console.error('Error removing bookmark:', error);
+      throw error;
+    }
+  }
+
+  // Personal Library Methods
+  static async addFavoriteCategory(userId: string, categoryId: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        'personalLibrary.favoriteCategories': arrayUnion(categoryId),
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error adding favorite category:', error);
+      throw error;
+    }
+  }
+
+  static async removeFavoriteCategory(userId: string, categoryId: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        'personalLibrary.favoriteCategories': arrayRemove(categoryId),
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error removing favorite category:', error);
+      throw error;
+    }
+  }
+
+  static async getUserPersonalLibrary(userId: string): Promise<any> {
+    try {
+      const userDoc = await this.getUserDocument(userId);
+      return userDoc?.personalLibrary || {
+        bookmarkedPrayers: [],
+        customPrayers: [],
+        favoriteCategories: []
+      };
+    } catch (error) {
+      console.error('Error getting user personal library:', error);
       throw error;
     }
   }
