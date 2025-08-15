@@ -6,7 +6,10 @@ export interface Prayer {
   subcategory?: string;
   description?: string;
   tags?: string[];
+  image?: string; // URL to prayer image for CMS
   isBookmarked?: boolean;
+  isSuggested?: boolean; // Marks if prayer should appear in suggested prayers section
+  suggestionOrder?: number; // Order for suggested prayers display
 }
 
 export interface PrayerCategory {

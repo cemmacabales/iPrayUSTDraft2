@@ -27,7 +27,7 @@ export const PRAYER_CATEGORIES: PrayerCategory[] = [
     id: 'devotional',
     title: 'Devotional Prayers',
     description: 'Angelus, Regina Coeli, Prayers Before/After Mass, Before Study, Before Exams.',
-    icon: 'heart',
+    icon: 'heart-outline',
     prayers: [
       {
         id: 'angelus',

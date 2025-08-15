@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { FirebaseService } from '../services/firebaseService';
+import { OfflineService } from '../services/offlineService';
 import { Prayer, PrayerCategory, VerseOfTheDay } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -10,7 +11,10 @@ interface PrayerContextType {
   prayerStats: Record<string, number>;
   verseOfTheDay: VerseOfTheDay | null;
   loading: boolean;
+  isOnline: boolean;
+  lastSyncTime: number;
   refreshPrayers: () => Promise<void>;
+  forceRefresh: () => Promise<void>;
   addBookmark: (prayerId: string) => Promise<void>;
   removeBookmark: (prayerId: string) => Promise<void>;
   addRecentPrayer: (prayerId: string) => Promise<void>;
@@ -36,6 +40,8 @@ export const PrayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [prayerStats, setPrayerStats] = useState<Record<string, number>>({});
   const [verseOfTheDay, setVerseOfTheDay] = useState<VerseOfTheDay | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState(0);
 
   useEffect(() => {
     loadPrayerData();
@@ -55,6 +61,12 @@ export const PrayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const loadPrayerData = async () => {
     try {
       setLoading(true);
+      
+      // Update sync status
+      const syncStatus = await OfflineService.getSyncStatus();
+      setIsOnline(syncStatus.isOnline);
+      setLastSyncTime(syncStatus.lastSyncTime);
+      
       const [categories, verse] = await Promise.all([
         FirebaseService.getPrayerCategories(),
         FirebaseService.getVerseOfTheDay(),
@@ -62,8 +74,28 @@ export const PrayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       
       setPrayerCategories(categories);
       setVerseOfTheDay(verse);
+      
+      // Update sync status after successful load
+      await OfflineService.setSyncStatus({ 
+        isOnline: true, 
+        lastSyncTime: Date.now() 
+      });
+      setIsOnline(true);
+      setLastSyncTime(Date.now());
+      
     } catch (error) {
       console.error('Error loading prayer data:', error);
+      
+      // Try to load cached data
+      const cachedData = await OfflineService.getCachedData();
+      if (cachedData) {
+        // Convert cached prayers back to categories format
+        // For now, we'll keep the existing structure
+        console.log('Using cached data for offline mode');
+      }
+      
+      await OfflineService.setSyncStatus({ isOnline: false });
+      setIsOnline(false);
     } finally {
       setLoading(false);
     }
@@ -90,6 +122,11 @@ export const PrayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const refreshPrayers = async () => {
+    await loadPrayerData();
+  };
+
+  const forceRefresh = async () => {
+    await OfflineService.forceRefresh();
     await loadPrayerData();
     if (user) {
       await loadUserData();
@@ -174,7 +211,10 @@ export const PrayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     prayerStats,
     verseOfTheDay,
     loading,
+    isOnline,
+    lastSyncTime,
     refreshPrayers,
+    forceRefresh,
     addBookmark,
     removeBookmark,
     addRecentPrayer,

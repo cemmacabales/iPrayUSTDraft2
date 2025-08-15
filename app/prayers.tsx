@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Image, TextInput, FlatList } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { PRAYER_CATEGORIES } from '../constants/prayers';
+
 import { PrayerCategory, Prayer } from '../types';
 import { colors, commonStyles } from '../constants/styles';
-import { StorageUtils } from '../utils/storage';
+
 import { getTimeContext } from '../utils/prayerUtils';
 import { LinearGradient } from 'expo-linear-gradient';
-import LoadingSkeleton from '../components/LoadingSkeleton';
+
+import { useAuth } from '../contexts/AuthContext';
+import { usePrayer } from '../contexts/PrayerContext';
+import { FirebaseService } from '../services/firebaseService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,49 +34,77 @@ interface PrayersPageProps {
 }
 
 export default function PrayersPage({ prayerId }: PrayersPageProps) {
+  const { user, userProfile } = useAuth();
+  const { userBookmarks, addBookmark, removeBookmark, prayerCategories, forceRefresh, addRecentPrayer } = usePrayer();
   const [activeSection, setActiveSection] = useState<'my-library' | 'ust-library'>('my-library');
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [recentPrayers, setRecentPrayers] = useState<string[]>([]);
   const [prayerStats, setPrayerStats] = useState<Record<string, number>>({});
-  const [isLoading, setIsLoading] = useState(true);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [selectedPrayer, setSelectedPrayer] = useState<Prayer | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadUserData();
-  }, []);
+  }, [user, userProfile]);
 
   // Handle prayerId prop to automatically select prayer
   useEffect(() => {
     if (prayerId) {
-      const allPrayers = PRAYER_CATEGORIES.flatMap(category => category.prayers);
+      const allPrayers = prayerCategories.flatMap(category => category.prayers);
       const prayer = allPrayers.find(p => p.id === prayerId);
       if (prayer) {
         setSelectedPrayer(prayer);
         setNavigationHistory([prayer.id]);
-        // Add to recent prayers
-        StorageUtils.addRecentPrayer(prayer.id);
+        // Add to recent prayers if user is logged in
+         if (user?.uid && prayerId && typeof prayerId === 'string') {
+           addRecentPrayer(prayerId).catch(error => {
+             console.error('Error adding recent prayer:', error);
+           });
+         }
       }
     }
   }, [prayerId]);
 
   const loadUserData = async () => {
     try {
-      const [bookmarksData, recentData, statsData] = await Promise.all([
-        StorageUtils.getBookmarks(),
-        StorageUtils.getRecentPrayers(),
-        StorageUtils.getPrayerStats(),
-      ]);
-      setBookmarks(bookmarksData);
-      setRecentPrayers(recentData);
-      setPrayerStats(statsData);
+      if (user?.uid) {
+        // Load data from Firebase for authenticated user
+        const [recentData, statsData] = await Promise.all([
+          FirebaseService.getRecentPrayers(user.uid),
+          FirebaseService.getPrayerStats(user.uid),
+        ]);
+        setRecentPrayers(recentData);
+        setPrayerStats(statsData);
+      } else {
+        // No user authenticated - set empty data
+         setRecentPrayers([]);
+         setPrayerStats({});
+      }
     } catch (error) {
       console.error('Error loading user data:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    
+    try {
+      // Force refresh to clear cache and fetch fresh data from Firebase
+      await forceRefresh();
+      
+      // Reload user data
+      await loadUserData();
+      
+      // Add a small delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Error refreshing data:', error);
     } finally {
-      setIsLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -88,8 +119,14 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
   const handlePrayerSelect = (prayer: Prayer) => {
     setSelectedPrayer(prayer);
     setNavigationHistory(prev => [...prev, prayer.id]);
-    // Add to recent prayers
-    StorageUtils.addRecentPrayer(prayer.id);
+    // Add to recent prayers if user is logged in
+    if (user?.uid && prayer.id && typeof prayer.id === 'string') {
+      try {
+        addRecentPrayer(prayer.id);
+      } catch (error) {
+        console.error('Error adding recent prayer:', error);
+      }
+    }
   };
 
   const handleBackPress = () => {
@@ -104,7 +141,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
       } else {
         // Go back to previous prayer
         const previousPrayerId = newHistory[newHistory.length - 1];
-        const allPrayers = PRAYER_CATEGORIES.flatMap(category => category.prayers);
+        const allPrayers = prayerCategories.flatMap(category => category.prayers);
         const previousPrayer = allPrayers.find(p => p.id === previousPrayerId);
         if (previousPrayer) {
           setSelectedPrayer(previousPrayer);
@@ -130,7 +167,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
         return getTimeBasedPrayers().length;
       default:
         // For category sections
-        const category = PRAYER_CATEGORIES.find(cat => cat.id === sectionId);
+        const category = prayerCategories.find(cat => cat.id === sectionId);
         return category ? category.prayers.length : 0;
     }
   };
@@ -144,19 +181,19 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
   };
 
   const getBookmarkedPrayers = (): Prayer[] => {
-    const allPrayers = PRAYER_CATEGORIES.flatMap(category => category.prayers);
-    return allPrayers.filter(prayer => bookmarks.includes(prayer.id));
+    const allPrayers = prayerCategories.flatMap(category => category.prayers);
+    return allPrayers.filter(prayer => userBookmarks.includes(prayer.id));
   };
 
   const getRecentPrayersData = (): Prayer[] => {
-    const allPrayers = PRAYER_CATEGORIES.flatMap(category => category.prayers);
+    const allPrayers = prayerCategories.flatMap(category => category.prayers);
     return recentPrayers
       .map(id => allPrayers.find(prayer => prayer.id === id))
       .filter(Boolean) as Prayer[];
   };
 
   const getPopularPrayers = (): Prayer[] => {
-    const allPrayers = PRAYER_CATEGORIES.flatMap(category => category.prayers);
+    const allPrayers = prayerCategories.flatMap(category => category.prayers);
     return allPrayers
       .filter(prayer => prayerStats[prayer.id] > 0)
       .sort((a, b) => (prayerStats[b.id] || 0) - (prayerStats[a.id] || 0))
@@ -165,7 +202,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
 
   const getTimeBasedPrayers = (): Prayer[] => {
     const context = getTimeContext();
-    const allPrayers = PRAYER_CATEGORIES.flatMap(category => category.prayers);
+    const allPrayers = prayerCategories.flatMap(category => category.prayers);
     
     if (context.isMorning) {
       return allPrayers.filter(prayer => 
@@ -200,7 +237,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
   const getMyLibrarySections = (): SectionData[] => {
     const sections: SectionData[] = [];
     
-    if (bookmarks.length > 0) {
+    if (userBookmarks.length > 0) {
       const filteredBookmarks = filterPrayersBySearch(getBookmarkedPrayers());
       if (filteredBookmarks.length > 0) {
         const isExpanded = expandedSection === 'bookmarks';
@@ -284,7 +321,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
     }
 
     // Add categories as sections
-    PRAYER_CATEGORIES.forEach(category => {
+    prayerCategories.forEach(category => {
       const filteredPrayers = filterPrayersBySearch(category.prayers);
       if (filteredPrayers.length > 0) {
         const isExpanded = expandedSection === category.id;
@@ -308,7 +345,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
 
   const renderPrayerCard = ({ item }: { item: GridItem }) => {
     const prayer = item.data as Prayer;
-    const isBookmarked = bookmarks.includes(prayer.id);
+    const isBookmarked = userBookmarks.includes(prayer.id);
     const prayerCount = prayerStats[prayer.id] || 0;
 
     return (
@@ -418,7 +455,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
   );
 
   const renderSearchResults = () => {
-    const allPrayers = PRAYER_CATEGORIES.flatMap(category => category.prayers);
+    const allPrayers = prayerCategories.flatMap(category => category.prayers);
     const filteredPrayers = filterPrayersBySearch(allPrayers);
     
     if (filteredPrayers.length === 0) {
@@ -513,12 +550,12 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
     </View>
   );
 
-  const renderLoadingState = () => <LoadingSkeleton />;
+
 
   const renderPrayerDetail = () => {
     if (!selectedPrayer) return null;
 
-    const isBookmarked = bookmarks.includes(selectedPrayer.id);
+    const isBookmarked = userBookmarks.includes(selectedPrayer.id);
     const prayerCount = prayerStats[selectedPrayer.id] || 0;
 
     const handleShare = () => {
@@ -544,12 +581,24 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
               </View>
               <TouchableOpacity
                 onPress={async () => {
-                  if (isBookmarked) {
-                    await StorageUtils.removeBookmark(selectedPrayer.id);
-                    setBookmarks(prev => prev.filter(id => id !== selectedPrayer.id));
-                  } else {
-                    await StorageUtils.addBookmark(selectedPrayer.id);
-                    setBookmarks(prev => [...prev, selectedPrayer.id]);
+                  if (!user) {
+                    alert('Please log in to bookmark prayers');
+                    return;
+                  }
+                  if (!selectedPrayer?.id) {
+                    alert('Invalid prayer selected. Please try again.');
+                    console.error('selectedPrayer:', selectedPrayer);
+                    return;
+                  }
+                  try {
+                    if (isBookmarked) {
+                      await removeBookmark(selectedPrayer.id);
+                    } else {
+                      await addBookmark(selectedPrayer.id);
+                    }
+                  } catch (error) {
+                    console.error('Error toggling bookmark:', error);
+                    alert('Failed to update bookmark. Please try again.');
                   }
                 }}
                 style={styles.prayerDetailBookmarkButton}
@@ -595,12 +644,24 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
               <TouchableOpacity 
                 style={[styles.actionButton, isBookmarked && styles.saveButton]} 
                 onPress={async () => {
-                  if (isBookmarked) {
-                    await StorageUtils.removeBookmark(selectedPrayer.id);
-                    setBookmarks(prev => prev.filter(id => id !== selectedPrayer.id));
-                  } else {
-                    await StorageUtils.addBookmark(selectedPrayer.id);
-                    setBookmarks(prev => [...prev, selectedPrayer.id]);
+                  if (!user) {
+                    alert('Please log in to bookmark prayers');
+                    return;
+                  }
+                  if (!selectedPrayer?.id) {
+                    alert('Invalid prayer selected. Please try again.');
+                    console.error('selectedPrayer:', selectedPrayer);
+                    return;
+                  }
+                  try {
+                    if (isBookmarked) {
+                      await removeBookmark(selectedPrayer.id);
+                    } else {
+                      await addBookmark(selectedPrayer.id);
+                    }
+                  } catch (error) {
+                    console.error('Error toggling bookmark:', error);
+                    alert('Failed to update bookmark. Please try again.');
                   }
                 }}
               >
@@ -622,16 +683,7 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
 
   const sections = activeSection === 'my-library' ? getMyLibrarySections() : getUSTLibrarySections();
 
-  if (isLoading) {
-    return (
-      <View style={[commonStyles.container, styles.container]}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Prayer Library</Text>
-        </View>
-        {renderLoadingState()}
-      </View>
-    );
-  }
+
 
   return (
     <View style={[commonStyles.container, styles.container]}>
@@ -657,6 +709,23 @@ export default function PrayersPage({ prayerId }: PrayersPageProps) {
               }
             </Text>
           </View>
+          {!selectedPrayer && (
+            <TouchableOpacity
+              onPress={onRefresh}
+              style={styles.refreshButton}
+              disabled={refreshing}
+            >
+              <Ionicons 
+                name={refreshing ? "sync" : "refresh"} 
+                size={20} 
+                color={refreshing ? colors.secondary[400] : colors.primary[600]} 
+                style={refreshing ? { transform: [{ rotate: '180deg' }] } : undefined}
+              />
+              <Text style={[styles.refreshButtonText, refreshing && styles.refreshButtonTextDisabled]}>
+                Refresh
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -1142,6 +1211,23 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: colors.white,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.primary[50],
+    gap: 6,
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary[600],
+  },
+  refreshButtonTextDisabled: {
+    color: colors.secondary[400],
   },
 
 });

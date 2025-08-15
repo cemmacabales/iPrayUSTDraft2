@@ -73,6 +73,7 @@ Let us pray:
 Pour forth, we beseech thee, O Lord, thy grace into our hearts; that we, to whom the incarnation of Christ, thy Son, was made known by the message of an angel, may by his passion and cross be brought to the glory of his resurrection, through the same Christ our Lord. Amen.`,
         category: 'devotional',
         description: 'Traditional prayer commemorating the Annunciation',
+        isSuggested: true,
       },
       {
         id: 'before-study',
@@ -84,6 +85,7 @@ Grant me a penetrating mind to understand, a retentive memory, method and ease i
 Guide the beginning of my work, direct its progress, and bring it to successful completion. This I ask through Jesus Christ, true God and true man, living and reigning with You and the Father, forever and ever. Amen.`,
         category: 'devotional',
         description: 'Prayer for academic success and wisdom',
+        isSuggested: true,
       },
       {
         id: 'before-exams',
@@ -113,6 +115,7 @@ Ever this day be at my side,
 To light and guard, to rule and guide. Amen.`,
         category: 'protection',
         description: 'Traditional prayer to one\'s guardian angel',
+        isSuggested: true,
       },
       {
         id: 'st-michael',
@@ -127,6 +130,7 @@ To light and guard, to rule and guide. Amen.`,
         content: `O St. Joseph, whose protection is so great, so strong, so prompt before the throne of God, I place in you all my interests and desires. O St. Joseph, do assist me by your powerful intercession, and obtain for me from your divine Son all spiritual blessings, through Jesus Christ, our Lord. So that, having engaged here below your heavenly power, I may offer my thanksgiving and homage to the most loving of Fathers. O St. Joseph, I never weary contemplating you, and Jesus asleep in your arms; I dare not approach while He reposes near your heart. Press Him in my name and kiss His fine head for me and ask him to return the Kiss when I draw my dying breath. St. Joseph, Patron of departing souls - Pray for me. Amen.`,
         category: 'protection',
         description: 'Prayer to St. Joseph for protection and intercession',
+        isSuggested: true,
       },
     ]
   },
@@ -298,6 +302,7 @@ async function populatePrayers(db) {
           subcategory: prayer.subcategory || null,
           description: prayer.description || null,
           tags: prayer.tags || [],
+          isSuggested: prayer.isSuggested || false,
           order: i + 1,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp()

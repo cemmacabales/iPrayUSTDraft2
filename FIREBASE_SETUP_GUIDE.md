@@ -119,6 +119,7 @@ Create these collections in Firestore with the following structure:
   subcategory: "marian", // Optional
   description: "Traditional prayer commemorating the Annunciation",
   tags: ["mary", "incarnation", "traditional"], // Optional
+  image: "https://example.com/images/angelus.jpg", // Optional: URL to prayer image for CMS
   order: 1, // Order within category
   createdAt: serverTimestamp(),
   updatedAt: serverTimestamp()
@@ -162,6 +163,24 @@ Create these collections in Firestore with the following structure:
   reference: "Jeremiah 29:11",
   date: "2024-01-15",
   createdAt: serverTimestamp()
+}
+```
+
+#### 7. `suggested_prayers` Collection (🆕 CMS-Managed)
+```javascript
+// Document ID: {suggestionId}
+{
+  id: "morning-suggestion-1",
+  title: "Morning Prayer Starter",
+  description: "Perfect way to start your day with prayer",
+  prayerId: "before-study", // References prayer in main collection
+  timeContext: "morning", // morning, evening, study, exam, anytime
+  tags: ["morning", "study", "daily"],
+  image: "https://images.unsplash.com/photo-id?w=400&h=300",
+  order: 1,
+  isActive: true,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp()
 }
 ```
 

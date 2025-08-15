@@ -1,15 +1,15 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
-import { getAnalytics } from 'firebase/analytics';
-import { getMessaging } from 'firebase/messaging';
+import { getStorage } from 'firebase/storage';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+
 
 // Firebase configuration for UST Prayer Library
 // Replace these values with your actual Firebase project configuration
 const firebaseConfig = {
-apiKey: "AIzaSyCJ_mI74aKePbU4EIwLQ71RSjyd_PswG0Y",
+  apiKey: "AIzaSyCJ_mI74aKePbU4EIwLQ71RSjyd_PswG0Y",
   authDomain: "iprayust.firebaseapp.com",
   projectId: "iprayust",
   storageBucket: "iprayust.firebasestorage.app",
@@ -21,33 +21,15 @@ apiKey: "AIzaSyCJ_mI74aKePbU4EIwLQ71RSjyd_PswG0Y",
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
-export const auth = getAuth(app);
+// Initialize Firebase Auth with AsyncStorage persistence
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+});
+
+// Initialize other Firebase services
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
 export const storage = getStorage(app);
-
-// Initialize Analytics (optional, for web only)
-let analytics = null;
-if (typeof window !== 'undefined') {
-  try {
-    analytics = getAnalytics(app);
-  } catch (error) {
-    console.log('Analytics not available:', error);
-  }
-}
-export { analytics };
-
-// Initialize Messaging for push notifications (optional)
-let messaging = null;
-if (typeof window !== 'undefined') {
-  try {
-    messaging = getMessaging(app);
-  } catch (error) {
-    console.log('Messaging not available:', error);
-  }
-}
-export { messaging };
 
 // Development environment emulator connections
 // Uncomment these lines if you want to use Firebase emulators for development
@@ -72,13 +54,18 @@ if (__DEV__ && !auth._delegate._config.emulator) {
 // - notifications: Push notification logs (optional)
 // - analytics: Custom analytics data (optional)
 //
-// Security Rules Required:
-// - Users can only read/write their own user documents
-// - Prayer categories and prayers are read-only for all authenticated users
-// - User stats and recent prayers are private to each user
-// - Verses of the day are read-only for all users
+// Example Prayer Document Structure:
+// {
+//   id: string,
+//   title: string,
+//   content: string,
+//   category: string,
+//   tags: string[],
+//   image?: string,  // Optional image URL for CMS management
+//   createdAt: Timestamp,
+//   updatedAt: Timestamp
+// }
 
 export default app;
 
-// Export configuration for reference
 export { firebaseConfig };

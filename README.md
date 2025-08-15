@@ -154,7 +154,17 @@ iPrayUST/
 - Firebase Firestore for prayer content
 - Firebase Authentication for user accounts
 - Firebase Analytics for user engagement
-- Push notifications with expo-notifications
+- Offline data synchronization with AsyncStorage
+
+## 🔥 Firebase Collections
+
+- **users**: User profiles and authentication data
+- **prayerCategories**: Prayer categories with metadata
+- **prayers**: Individual prayers with content and images
+- **suggested_prayers**: 🆕 CMS-managed prayer suggestions with time-based filtering
+- **userStats**: User prayer statistics and tracking
+- **userRecent**: Recent prayer history
+- **versesOfTheDay**: Daily inspirational verses
 
 ### Additional Features
 - Bible integration via API.bible

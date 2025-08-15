@@ -3,23 +3,26 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { colors } from '../constants/styles';
 import { StorageUtils } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function IndexPage() {
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, loading } = useAuth();
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
 
   useEffect(() => {
-    checkOnboardingStatus();
-  }, []);
+    if (!loading) {
+      checkOnboardingStatus();
+    }
+  }, [loading, user]);
 
   const checkOnboardingStatus = async () => {
     try {
       const isOnboardingCompleted = await StorageUtils.isOnboardingCompleted();
-      const isUserLoggedIn = await StorageUtils.isUserLoggedIn();
       
       if (!isOnboardingCompleted) {
         // User hasn't completed onboarding
         router.replace('/onboarding');
-      } else if (!isUserLoggedIn) {
+      } else if (!user) {
         // User completed onboarding but not logged in
         router.replace('/login');
       } else {
@@ -31,16 +34,20 @@ export default function IndexPage() {
       // Default to onboarding if there's an error
       router.replace('/onboarding');
     } finally {
-      setIsLoading(false);
+      setIsCheckingOnboarding(false);
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.loadingText}>Loading...</Text>
-      <ActivityIndicator size="large" color={colors.yellow} />
-    </View>
-  );
+  if (loading || isCheckingOnboarding) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>Loading...</Text>
+        <ActivityIndicator size="large" color={colors.yellow} />
+      </View>
+    );
+  }
+
+  return null;
 }
 
 const styles = StyleSheet.create({

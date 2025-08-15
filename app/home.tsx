@@ -1,28 +1,59 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Animated, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Animated, Image, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, commonStyles } from '../constants/styles';
-import { getPrayerOfTheDay, getPrayerSubtitle, getPrayerIcon, getTimeContext, getAllPrayers } from '../utils/prayerUtils';
+import { getPrayerOfTheDay, getPrayerSubtitle, getPrayerIcon, getTimeContext } from '../utils/prayerUtils';
 import { Prayer } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { usePrayer } from '../contexts/PrayerContext';
+import { OfflineService } from '../services/offlineService';
+
+// Function to generate random pastel colors
+const generatePastelColor = (seed: string) => {
+  // Use prayer ID as seed for consistent colors
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const pastelColors = [
+    '#FFE5E5', // Light Pink
+    '#E5F3FF', // Light Blue
+    '#E5FFE5', // Light Green
+    '#FFF5E5', // Light Orange
+    '#F0E5FF', // Light Purple
+    '#FFFFE5', // Light Yellow
+    '#E5FFFF', // Light Cyan
+    '#FFE5F5', // Light Rose
+    '#F5FFE5', // Light Lime
+    '#E5F0FF', // Light Periwinkle
+  ];
+  
+  const index = Math.abs(hash) % pastelColors.length;
+  return pastelColors[index];
+};
 
 const { width } = Dimensions.get('window');
 
 export default function HomePage() {
   const { user, userProfile } = useAuth();
-  const { 
-    userBookmarks, 
-    recentPrayers, 
-    prayerStats, 
+  const {
+    prayerCategories,
+    userBookmarks,
+    recentPrayers,
+    prayerStats,
     verseOfTheDay,
-    loading: prayerLoading 
+    getPrayerById,
+    loading: prayerLoading,
+    forceRefresh,
   } = usePrayer();
   
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [prayerOfTheDay, setPrayerOfTheDay] = useState(() => getPrayerOfTheDay());
+  const [prayerOfTheDay, setPrayerOfTheDay] = useState<any>(null);
+  const [suggestedPrayers, setSuggestedPrayers] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnims = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
   const slideAnims = useRef([0, 1, 2, 3].map(() => new Animated.Value(20))).current;
@@ -34,86 +65,102 @@ export default function HomePage() {
   const progressBarAnim = useRef(new Animated.Value(0)).current;
   const remindersFadeAnim = useRef(new Animated.Value(0)).current;
 
-  const getSuggestedPrayers = () => {
+  const updateSuggestedPrayers = () => {
+    if (prayerCategories.length === 0) return;
+    
     const context = getTimeContext();
-    const allPrayers = getAllPrayers();
+    // Get all prayers from Firebase data
+    const allPrayers = prayerCategories.flatMap(category => category.prayers);
+    
+    let filteredPrayers = [];
     
     // Time-based suggestions using actual prayer data
     if (context.isMorning) {
-      const morningPrayers = allPrayers.filter(prayer => 
+      filteredPrayers = allPrayers.filter(prayer => 
         prayer.id === 'before-study' || 
         prayer.id === 'guardian-angel' ||
         prayer.id === 'angelus' ||
         prayer.id === 'st-joseph'
       );
-      
-      return morningPrayers.slice(0, 4).map(prayer => ({
-        id: prayer.id,
-        title: prayer.title,
-        subtitle: prayer.description || getPrayerSubtitle(prayer, 'Perfect for starting your day'),
-        icon: getPrayerIcon(prayer),
-        image: getPrayerImage(prayer),
-        onPress: () => router.push('/main?tab=prayers&prayerId=' + prayer.id),
-      }));
-    }
-    
-    if (context.isEvening) {
-      const eveningPrayers = allPrayers.filter(prayer => 
+    } else if (context.isEvening) {
+      filteredPrayers = allPrayers.filter(prayer => 
         prayer.id === 'angelus' || 
         prayer.id === 'guardian-angel' ||
         prayer.id === 'act-contrition' ||
         prayer.id === 'st-michael'
       );
-      
-      return eveningPrayers.slice(0, 4).map(prayer => ({
-        id: prayer.id,
-        title: prayer.title,
-        subtitle: prayer.description || getPrayerSubtitle(prayer, 'Perfect for ending your day'),
-        icon: getPrayerIcon(prayer),
-        image: getPrayerImage(prayer),
-        onPress: () => router.push('/main?tab=prayers&prayerId=' + prayer.id),
-      }));
+    } else {
+      // Default suggestions - use popular prayers or rotate through categories
+      filteredPrayers = allPrayers.filter(prayer => 
+        prayer.id === 'angelus' ||
+        prayer.id === 'before-study' ||
+        prayer.id === 'guardian-angel' ||
+        prayer.id === 'sacred-heart'
+      );
     }
     
-    // Default suggestions - use popular prayers or rotate through categories
-    const defaultPrayers = allPrayers.filter(prayer => 
-      prayer.id === 'angelus' ||
-      prayer.id === 'before-study' ||
-      prayer.id === 'guardian-angel' ||
-      prayer.id === 'sacred-heart'
-    );
-    
-    return defaultPrayers.slice(0, 4).map(prayer => ({
+    const suggestions = filteredPrayers.slice(0, 4).map(prayer => ({
       id: prayer.id,
       title: prayer.title,
-      subtitle: prayer.description || getPrayerSubtitle(prayer, 'A prayer for your spiritual journey'),
+      subtitle: prayer.description || getPrayerSubtitle(prayer, context.isMorning ? 'Perfect for starting your day' : context.isEvening ? 'Perfect for ending your day' : 'A prayer for your spiritual journey'),
       icon: getPrayerIcon(prayer),
       image: getPrayerImage(prayer),
       onPress: () => router.push('/main?tab=prayers&prayerId=' + prayer.id),
     }));
+    
+    setSuggestedPrayers(suggestions);
   };
 
   // Helper function to get appropriate image for each prayer
   const getPrayerImage = (prayer: Prayer): string => {
-    // Use consistent, themed images based on prayer category
-    const imageMap: Record<string, string> = {
-      'angelus': 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=400&fit=crop&crop=center',
-      'before-study': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop&crop=center',
-      'guardian-angel': 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=400&fit=crop&crop=center',
-      'st-joseph': 'https://images.unsplash.com/photo-1542810634-71277d95dcbb?w=400&h=400&fit=crop&crop=center',
-      'sacred-heart': 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=400&fit=crop&crop=center',
-      'st-michael': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop&crop=center',
-      'act-contrition': 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=400&fit=crop&crop=center',
-      'immaculate-heart': 'https://images.unsplash.com/photo-1542810634-71277d95dcbb?w=400&h=400&fit=crop&crop=center',
-      'rosary-intro': 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=400&fit=crop&crop=center',
-      'before-exams': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop&crop=center',
-      'dominican-blessing': 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=400&fit=crop&crop=center',
-    };
+    // Return any image URL from the prayer object (CMS or database)
+    if (prayer.image && prayer.image.trim() !== '') {
+      return prayer.image;
+    }
     
-    return imageMap[prayer.id] || imageMap['angelus']; // Default fallback
+    // If no image is provided, return empty string to show fallback color background
+    return '';
   };
 
-  const suggestedPrayers = getSuggestedPrayers();
+  // Load suggested prayers from database
+  const loadSuggestedPrayers = async () => {
+    try {
+      const dbSuggestedPrayers = await OfflineService.getSuggestedPrayersWithOfflineSupport();
+      
+      if (dbSuggestedPrayers && dbSuggestedPrayers.length > 0) {
+        console.log('✅ Found', dbSuggestedPrayers.length, 'suggested prayers from database');
+        
+        // Convert Prayer objects to suggestion format
+        const context = getTimeContext();
+        const suggestions = dbSuggestedPrayers.slice(0, 4).map((prayer: Prayer) => ({
+          id: prayer.id,
+          title: prayer.title,
+          subtitle: prayer.description || getPrayerSubtitle(prayer, context.isMorning ? 'Perfect for starting your day' : context.isEvening ? 'Perfect for ending your day' : 'A prayer for your spiritual journey'),
+          icon: getPrayerIcon(prayer),
+          image: getPrayerImage(prayer),
+          onPress: () => router.push('/main?tab=prayers&prayerId=' + prayer.id),
+        }));
+        
+        setSuggestedPrayers(suggestions);
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading suggested prayers from database:', error);
+    }
+    
+    // Fallback to hardcoded suggestions if database fails or is empty
+    console.log('📋 Falling back to hardcoded suggestions');
+    updateSuggestedPrayers();
+  };
+
+  // Update prayer of the day and suggested prayers when Firebase data is loaded
+  useEffect(() => {
+    if (prayerCategories.length > 0) {
+      const allPrayers = prayerCategories.flatMap(category => category.prayers);
+      setPrayerOfTheDay(getPrayerOfTheDay(allPrayers));
+      loadSuggestedPrayers();
+    }
+  }, [prayerCategories]);
 
   // Load user data
   // Data is now loaded through Firebase contexts
@@ -200,8 +247,45 @@ export default function HomePage() {
     });
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    
+    try {
+      // Force refresh to clear cache and fetch fresh data from Firebase
+      await forceRefresh();
+      
+      // Refresh prayer of the day with updated data
+      if (prayerCategories.length > 0) {
+        const allPrayers = prayerCategories.flatMap(category => category.prayers);
+        setPrayerOfTheDay(getPrayerOfTheDay(allPrayers));
+      }
+      
+      // Refresh suggested prayers
+      await loadSuggestedPrayers();
+      
+      // Add a small delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
-    <ScrollView style={[commonStyles.scrollView, styles.container]}>
+    <ScrollView 
+      style={[commonStyles.scrollView, styles.container]}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[colors.yellow]} // Android
+          tintColor={colors.yellow} // iOS
+          progressViewOffset={60} // iOS - Adjust spinner position
+          progressBackgroundColor={colors.white} // Android - Background color
+        />
+      }
+    >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -381,26 +465,35 @@ export default function HomePage() {
                 activeOpacity={0.9}
               >
                 <View style={styles.cardImageContainer}>
-                  <Image 
-                    source={{ uri: prayer.image }} 
-                    style={styles.cardImage}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.cardOverlay} />
+                  {prayer.image && prayer.image.trim() !== '' ? (
+                    <>
+                      <Image 
+                        source={{ uri: prayer.image }} 
+                        style={styles.cardImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.cardOverlay} />
+                    </>
+                  ) : (
+                    <View style={[
+                      styles.cardImage, 
+                      { backgroundColor: generatePastelColor(prayer.id) }
+                    ]} />
+                  )}
                   <View style={styles.cardContent}>
                     <View style={[styles.cardIcon, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
-                      <Ionicons name={prayer.icon as any} size={32} color={colors.white} />
-                    </View>
-                    <View style={styles.cardTextContainer}>
-                      <Text style={styles.cardCategory}>
-                        Daily Prayer
-                      </Text>
-                      <Text style={styles.cardTitle}>
-                        {prayer.title}
-                      </Text>
-                      <Text style={styles.cardSubtitle}>
-                        {prayer.subtitle}
-                      </Text>
+                       <Ionicons name={prayer.icon as any} size={32} color={(prayer.image && prayer.image.trim() !== '') ? colors.white : colors.primary[600]} />
+                     </View>
+                     <View style={styles.cardTextContainer}>
+                       <Text style={[styles.cardCategory, { color: (prayer.image && prayer.image.trim() !== '') ? 'rgba(255, 255, 255, 0.8)' : colors.secondary[600] }]}>
+                         Daily Prayer
+                       </Text>
+                       <Text style={[styles.cardTitle, { color: (prayer.image && prayer.image.trim() !== '') ? colors.white : colors.primary[800] }]}>
+                         {prayer.title}
+                       </Text>
+                       <Text style={[styles.cardSubtitle, { color: (prayer.image && prayer.image.trim() !== '') ? 'rgba(255, 255, 255, 0.9)' : colors.secondary[700] }]}>
+                         {prayer.subtitle}
+                       </Text>
                     </View>
                   </View>
                 </View>
@@ -433,8 +526,7 @@ export default function HomePage() {
           >
             {/* Recent Prayers */}
             {recentPrayers.slice(0, 3).map((prayerId: string, index: number) => {
-              const allPrayers = getAllPrayers();
-              const prayer = allPrayers.find(p => p.id === prayerId);
+              const prayer = getPrayerById(prayerId);
               if (!prayer) return null;
               
               return (
@@ -458,8 +550,7 @@ export default function HomePage() {
             
             {/* Bookmarked Prayers */}
             {userBookmarks.slice(0, 3).map((prayerId: string, index: number) => {
-              const allPrayers = getAllPrayers();
-              const prayer = allPrayers.find(p => p.id === prayerId);
+              const prayer = getPrayerById(prayerId);
               if (!prayer) return null;
               
               return (
@@ -492,47 +583,58 @@ export default function HomePage() {
               Prayer of the Day
             </Text>
             <TouchableOpacity
-              onPress={() => setPrayerOfTheDay(getPrayerOfTheDay())}
+              onPress={() => {
+                if (prayerCategories.length > 0) {
+                  const allPrayers = prayerCategories.flatMap(category => category.prayers);
+                  setPrayerOfTheDay(getPrayerOfTheDay(allPrayers));
+                }
+              }}
               style={styles.refreshButton}
             >
               <Ionicons name="refresh" size={16} color={colors.yellow} />
             </TouchableOpacity>
           </View>
-          <View style={styles.prayerReason}>
-            <Ionicons name={getPrayerIcon(prayerOfTheDay.prayer) as any} size={16} color={colors.yellow} />
-            <Text style={styles.prayerReasonText}>
-              {prayerOfTheDay.reason}
-            </Text>
-          </View>
-          <View style={styles.timeContext}>
-            <Text style={styles.timeContextText}>
-              {getTimeContext().isMorning ? '🌅 Morning' : 
-               getTimeContext().isAfternoon ? '☀️ Afternoon' : '🌙 Evening'}
-            </Text>
-          </View>
+          {prayerOfTheDay && (
+            <>
+              <View style={styles.prayerReason}>
+                <Ionicons name={getPrayerIcon(prayerOfTheDay.prayer) as any} size={16} color={colors.yellow} />
+                <Text style={styles.prayerReasonText}>
+                  {prayerOfTheDay.reason}
+                </Text>
+              </View>
+              <View style={styles.timeContext}>
+                <Text style={styles.timeContextText}>
+                  {getTimeContext().isMorning ? '🌅 Morning' : 
+                   getTimeContext().isAfternoon ? '☀️ Afternoon' : '🌙 Evening'}
+                </Text>
+              </View>
+            </>
+          )}
         </View>
-        <TouchableOpacity
-          onPress={() => router.push('/main?tab=prayers&prayerId=' + prayerOfTheDay.prayer.id)}
-          style={styles.featuredPrayerCard}
-        >
-          <View style={styles.featuredPrayerHeader}>
-            <View style={styles.featuredPrayerIcon}>
-              <Ionicons name={getPrayerIcon(prayerOfTheDay.prayer) as any} size={24} color={colors.black} />
+        {prayerOfTheDay && (
+          <TouchableOpacity
+            onPress={() => router.push('/main?tab=prayers&prayerId=' + prayerOfTheDay.prayer.id)}
+            style={styles.featuredPrayerCard}
+          >
+            <View style={styles.featuredPrayerHeader}>
+              <View style={styles.featuredPrayerIcon}>
+                <Ionicons name={getPrayerIcon(prayerOfTheDay.prayer) as any} size={24} color={colors.black} />
+              </View>
+              <Text style={styles.featuredPrayerTitle}>
+                {prayerOfTheDay.prayer.title}
+              </Text>
             </View>
-            <Text style={styles.featuredPrayerTitle}>
-              {prayerOfTheDay.prayer.title}
+            <Text style={styles.featuredPrayerDescription}>
+              {getPrayerSubtitle(prayerOfTheDay.prayer, prayerOfTheDay.reason)}
             </Text>
-          </View>
-          <Text style={styles.featuredPrayerDescription}>
-            {getPrayerSubtitle(prayerOfTheDay.prayer, prayerOfTheDay.reason)}
-          </Text>
-          <View style={styles.featuredPrayerFooter}>
-            <Text style={styles.featuredPrayerReadNow}>
-              Read Now
-            </Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.black} style={styles.featuredPrayerArrow} />
-          </View>
-        </TouchableOpacity>
+            <View style={styles.featuredPrayerFooter}>
+              <Text style={styles.featuredPrayerReadNow}>
+                Read Now
+              </Text>
+              <Ionicons name="arrow-forward" size={16} color={colors.black} style={styles.featuredPrayerArrow} />
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Footer */}

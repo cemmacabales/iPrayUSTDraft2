@@ -41,9 +41,9 @@ export const getTimeContext = () => {
 };
 
 // Get prayer of the day based on various factors
-export const getPrayerOfTheDay = (): PrayerOfTheDay => {
+export const getPrayerOfTheDay = (prayers?: Prayer[]): PrayerOfTheDay => {
   const context = getTimeContext();
-  const allPrayers = getAllPrayers();
+  const allPrayers = prayers || getAllPrayers();
   
   // Time-based prayer selection
   if (context.isMorning) {
@@ -191,7 +191,7 @@ export const getPrayerSubtitle = (prayer: Prayer, reason: string): string => {
 export const getPrayerIcon = (prayer: Prayer): string => {
   switch (prayer.id) {
     case 'angelus':
-      return 'heart';
+      return 'heart-outline';
     case 'before-study':
     case 'before-exams':
       return 'school';

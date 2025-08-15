@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { FirebaseService } from '../services/firebaseService';
-import { NotificationService } from '../services/notificationService';
+import { OfflineService } from '../services/offlineService';
+import { StorageUtils } from '../utils/storage';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -37,11 +38,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         // Load user profile from Firestore
         try {
-          const profile = await FirebaseService.getUserDocument(firebaseUser.uid);
+          const profile = await OfflineService.getUserProfileWithOfflineSupport(firebaseUser.uid);
           setUserProfile(profile);
-          
-          // Register device for push notifications
-          await NotificationService.registerDeviceToken(firebaseUser.uid);
         } catch (error) {
           console.error('Error loading user profile:', error);
         }
@@ -59,6 +57,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       await FirebaseService.signIn(email, password);
+      // Mark user as logged in in local storage
+      await StorageUtils.markUserLoggedIn();
     } catch (error) {
       setLoading(false);
       throw error;
@@ -70,6 +70,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       const displayName = `${firstName} ${lastName}`;
       await FirebaseService.signUp(email, password, displayName, firstName, lastName, studentNumber);
+      // Mark user as logged in in local storage
+      await StorageUtils.markUserLoggedIn();
     } catch (error) {
       setLoading(false);
       throw error;
@@ -79,6 +81,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     try {
       await FirebaseService.signOut();
+      // Clear local storage authentication state
+      await StorageUtils.markUserLoggedOut();
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
@@ -88,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUserProfile = async () => {
     if (user) {
       try {
-        const profile = await FirebaseService.getUserDocument(user.uid);
+        const profile = await OfflineService.syncUserProfile(user.uid);
         setUserProfile(profile);
       } catch (error) {
         console.error('Error refreshing user profile:', error);

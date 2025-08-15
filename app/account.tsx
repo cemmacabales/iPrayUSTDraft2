@@ -1,23 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { colors } from '../constants/styles';
 import { StorageUtils } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function AccountPage() {
+  const { user, userProfile, signOut } = useAuth();
   const [isEditMode, setIsEditMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
-  // Mock user data - in a real app, this would come from user authentication
-  const [userData, setUserData] = useState({
-    firstName: 'John',
-    lastName: 'Doe',
-    studentNumber: '2021-12345',
-    email: 'john.doe@ust.edu.ph',
-    password: 'password123'
-  });
+  // Use authenticated user data
+    const [userData, setUserData] = useState({
+      firstName: userProfile?.firstName || 'John',
+      lastName: userProfile?.lastName || 'Doe',
+      studentNumber: userProfile?.studentNumber || '2021-12345',
+      email: userProfile?.email || user?.email || 'john.doe@ust.edu.ph',
+      password: 'password123'
+    });
+
+    // Update userData when userProfile changes
+    useEffect(() => {
+      if (userProfile) {
+        setUserData({
+          firstName: userProfile.firstName || 'John',
+          lastName: userProfile.lastName || 'Doe',
+          studentNumber: userProfile.studentNumber || '2021-12345',
+          email: userProfile.email || user?.email || 'john.doe@ust.edu.ph',
+          password: 'password123'
+        });
+      }
+    }, [userProfile, user]);
 
   const [editData, setEditData] = useState({
     firstName: userData.firstName,
@@ -51,9 +66,14 @@ export default function AccountPage() {
 
   const confirmLogout = async () => {
     try {
-      // Reset onboarding status so user goes through onboarding again
-      await StorageUtils.resetOnboardingStatus();
+      // Sign out using AuthContext
+      await signOut();
       setShowLogoutModal(false);
+      
+      // Reset onboarding status to show onboarding again
+      await StorageUtils.resetOnboardingStatus();
+      
+      // Navigate to onboarding screen
       router.replace('/onboarding');
     } catch (error) {
       console.error('Error during logout:', error);
