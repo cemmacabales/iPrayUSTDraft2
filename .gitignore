@@ -65,7 +65,7 @@ android/app/build/
 .env.test.local
 .env.production.local
 
-# SSh
+# ssh
 *.pub
 *.pem
 *.key
